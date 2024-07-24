@@ -33,6 +33,8 @@ public class Crawler {
 			System.err.println("An error occured while reading the JSON from the URL: " + URL_STRING);
 			e.printStackTrace();
 		}
+		
+		SCANNER.close();
 
 	}
 
