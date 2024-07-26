@@ -32,9 +32,10 @@ public class Crawler {
 		} catch (IOException e) {
 			System.err.println("An error occured while reading the JSON from the URL: " + URL_STRING);
 			e.printStackTrace();
+		} finally {
+			SCANNER.close();
 		}
-		
-		SCANNER.close();
+
 
 	}
 
@@ -59,5 +60,6 @@ public class Crawler {
 			System.out.format("('%s', '%s', %s, %s, %s, %s, %s, %s, %s, %s),\n", name, divName, wins, losses, ties, gamesPlayed, points, goalsFor, goalsAgainst, goalDifference);
 		}
 	}
+
 
 }
