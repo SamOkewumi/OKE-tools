@@ -1,171 +1,85 @@
-// background.js
+// background.js (v0.2.0 - For multi-press grading via content script)
+console.log("QuickMark: Background Service Worker Started (v0.2.0)");
 
-// Define the fixed look-back offset in seconds (for MVP)
-const LOOK_BACK_SECONDS = 10;
+const LOOK_BACK_SECONDS = 10; // Still hardcoded for now
 
-// Listener for when a command is executed
-chrome.commands.onCommand.addListener(async (command) => {
-  if (command === "capture_timestamp") {
-    console.log("Capture timestamp command triggered!");
-
-    // Get the currently active tab
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-
-    if (tab && tab.url && (tab.url.includes("youtube.com/watch*") || tab.url.includes("youtube.com/watch"))) {
-      console.log("Current tab is a YouTube page:", tab.url);
-
-      try {
-        const results = await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          func: getVideoDetailsAndTimestamp, // Function to execute in the content script context
-        });
-
-        if (results && results[0] && results[0].result) {
-          const videoDetails = results[0].result;
-          if (videoDetails.error) {
-            console.error("Error from content script:", videoDetails.error);
-            return;
-          }
-
-          console.log("Video details from content:", videoDetails);
-
-          const adjustedTimestamp = Math.max(0, videoDetails.currentTime - LOOK_BACK_SECONDS);
-          const videoId = videoDetails.videoId;
-          const videoTitle = videoDetails.videoTitle || "Untitled YouTube Video"; // Fallback title
-
-          const newMark = {
-            videoId: videoId,
-            title: videoTitle,
-            timestamp: adjustedTimestamp, // This is the adjusted start time for the clip
-            originalCaptureTime: videoDetails.currentTime, // Actual time button was pressed
-            lookBackOffset: LOOK_BACK_SECONDS,
-            capturedAt: new Date().toISOString(),
-          };
-
-          // Store the new mark
-          chrome.storage.local.get({ videoMarks: [] }, (data) => {
-            const marks = data.videoMarks;
-            marks.push(newMark);
-            chrome.storage.local.set({ videoMarks: marks }, () => {
-              console.log("Timestamp mark saved:", newMark);
-              // Optional: Send a notification or update popup if it's open
-              // For MVP, console log is sufficient feedback here.
-            });
-          });
-
-        } else {
-          console.error("Could not get video details from the page. No results from executeScript.");
-        }
-      } catch (e) {
-        console.error("Error executing script or processing results:", e);
-      }
-    } else {
-      console.log("Not a YouTube video page or no active tab found.");
-      if(tab && tab.url) {
-        console.log("Current URL:", tab.url);
-      }
-    }
-  }
-});
-
-// This function will be injected into the YouTube page
-// It runs in the context of the page, not the background script
-function getVideoDetailsAndTimestamp() {
-  try {
-    const videoElement = document.querySelector('video');
-    if (!videoElement) {
-      return { error: "Video element not found on page." };
-    }
-
-    const currentTime = videoElement.currentTime;
-    let videoId = '';
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.has('v')) {
-      videoId = urlParams.get('v');
-    } else {
-      // Fallback for potentially different URL structures (shorts, embeds)
-      // Regex tries to find video ID in common YouTube URL patterns
-      const path = window.location.pathname;
-      const V_PARAM_REGEX = /[?&]v=([^&]+)/; // Standard v= parameter
-      const SHORTS_REGEX = /^\/shorts\/([a-zA-Z0-9_-]+)/;
-      const EMBED_REGEX = /^\/embed\/([a-zA-Z0-9_-]+)/;
-      const WATCH_PATH_REGEX = /^\/watch/; // Often implies v= is present
-
-      let match;
-      if (V_PARAM_REGEX.test(window.location.search)) {
-        match = window.location.search.match(V_PARAM_REGEX);
-        if (match) videoId = match[1];
-      } else if (SHORTS_REGEX.test(path)) {
-        match = path.match(SHORTS_REGEX);
-        if (match) videoId = match[1];
-      } else if (EMBED_REGEX.test(path)) {
-        match = path.match(EMBED_REGEX);
-        if (match) videoId = match[1];
-      } else if (WATCH_PATH_REGEX.test(path) && urlParams.has('v')) {
-        // This case should have been caught by the first check, but as a fallback
-        videoId = urlParams.get('v');
-      }
-    }
-
-
-    // Attempt to get video title
-    // Prioritize specific title elements, then fall back to document.title
-    let videoTitle = "Untitled YouTube Video"; // Default
-    const titleElementSelectors = [
-        'h1.ytd-watch-metadata .title', // Common on desktop
-        '#title h1 yt-formatted-string', // Another common one
-        '#video-title', // Often used in older or different layouts
-        '.title.ytd-video-primary-info-renderer' // Yet another possibility
-    ];
-
-    for (const selector of titleElementSelectors) {
-        const element = document.querySelector(selector);
-        if (element && element.textContent && element.textContent.trim() !== "") {
-            videoTitle = element.textContent.trim();
-            break;
-        }
-    }
-
-    if (videoTitle === "Untitled YouTube Video" && document.title) {
-         // Fallback to document.title if no specific element was found or was empty
-        let potentialTitle = document.title;
-        if (potentialTitle.toLowerCase().endsWith(" - youtube")) {
-            potentialTitle = potentialTitle.substring(0, potentialTitle.toLowerCase().lastIndexOf(" - youtube"));
-        }
-        if (potentialTitle.trim() !== "") {
-            videoTitle = potentialTitle.trim();
-        }
-    }
-
-
-    if (!videoId) {
-        console.warn("Could not automatically determine Video ID from URL:", window.location.href);
-        // videoId might still be empty if it's an unusual YouTube page structure
-    }
-
-    return {
-      currentTime: currentTime,
-      videoId: videoId,
-      videoTitle: videoTitle
-    };
-  } catch (e) {
-    // It's good to return the error message string for easier debugging from background
-    return { error: "Error in content script function: " + e.message, stack: e.stack };
-  }
-}
-
-// Optional: Log when the extension is installed or updated (for debugging)
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === "install") {
-    console.log("YouTube QuickMark MVP installed.");
-    // Initialize storage if it's the first install
-    chrome.storage.local.get('videoMarks', (data) => {
-      if (!data.videoMarks) {
-        chrome.storage.local.set({ videoMarks: [] });
-      }
-    });
+    console.log("QuickMark: Extension installed.");
+    chrome.storage.local.set({ videoMarks: [] }); // Initialize storage
   } else if (details.reason === "update") {
     const thisVersion = chrome.runtime.getManifest().version;
-    console.log(`YouTube QuickMark MVP updated from ${details.previousVersion} to ${thisVersion}.`);
+    console.log(`QuickMark: Extension updated from ${details.previousVersion} to ${thisVersion}.`);
+    // Potential migration logic here if storage structure changes
   }
 });
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === "QUICKMARK_CAPTURE") {
+    console.log("QuickMark: Received capture data from content script:", message);
+
+    if (!message.videoId && (sender.tab && sender.tab.url && (sender.tab.url.includes("youtube.com/watch") || sender.tab.url.includes("youtube.com/shorts")))) {
+        console.warn("QuickMark: VideoId was missing from content script message for a YouTube page. Attempting to extract from sender tab.");
+        // Attempt to extract from sender.tab.url as a last resort if content script failed
+        try {
+            const url = new URL(sender.tab.url);
+            if (url.hostname === 'www.youtube.com' || url.hostname === 'youtube.com') {
+                if (url.pathname === '/watch') {
+                    message.videoId = url.searchParams.get('v') || message.videoId;
+                } else if (url.pathname.startsWith('/shorts/')) {
+                    message.videoId = url.pathname.split('/shorts/')[1] || message.videoId;
+                }
+            }
+            if (message.videoId) console.log("QuickMark: Fallback VideoId extraction in background:", message.videoId);
+        } catch(e) {
+            console.error("QuickMark: Error in fallback VideoId extraction in background:", e);
+        }
+    }
+    
+    if (!message.videoId) {
+        console.error("QuickMark: VideoId is missing. Cannot save mark reliably.");
+        sendResponse({ status: "error", message: "Error: Missing Video ID." });
+        return true; // Indicate async response
+    }
+
+
+    const adjustedTimestamp = Math.max(0, message.originalCaptureTime - LOOK_BACK_SECONDS);
+
+    const newMark = {
+      videoId: message.videoId,
+      title: message.videoTitle || "Untitled YouTube Video",
+      timestamp: adjustedTimestamp, // Adjusted start time for the clip
+      grade: message.grade,       // The new grade from content script
+      originalCaptureTime: message.originalCaptureTime,
+      lookBackOffset: LOOK_BACK_SECONDS,
+      capturedAt: new Date().toISOString(),
+    };
+
+    chrome.storage.local.get({ videoMarks: [] }, (data) => {
+      if (chrome.runtime.lastError) {
+        console.error("QuickMark: Error fetching marks from storage:", chrome.runtime.lastError);
+        sendResponse({ status: "error", message: "Storage read error." });
+        return;
+      }
+      
+      const marks = data.videoMarks || []; // Ensure marks is an array
+      marks.push(newMark);
+
+      chrome.storage.local.set({ videoMarks: marks }, () => {
+        if (chrome.runtime.lastError) {
+          console.error("QuickMark: Error saving mark to storage:", chrome.runtime.lastError);
+          sendResponse({ status: "error", message: "Storage write error." });
+        } else {
+          console.log("QuickMark: Timestamp mark saved with grade:", newMark);
+          sendResponse({ status: "success", message: "Mark saved!", adjustedTimestamp: newMark.timestamp });
+        }
+      });
+    });
+
+    return true; // Crucial for async sendResponse
+  }
+  // Handle other message types if any in the future
+  return false; // Indicate not handling this message type synchronously
+});
+
+console.log("QuickMark: Background Service Worker Event Listeners Attached (v0.2.0).");

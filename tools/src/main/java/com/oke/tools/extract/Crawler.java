@@ -61,5 +61,15 @@ public class Crawler {
 		}
 	}
 
+	private static void processJson2(JsonNode jsonNode) {
+		for(JsonNode node : jsonNode) {
+			String firstName = node.get("fname").textValue();
+			String lastName = node.get("lname").textValue();
+			String teamName = node.get("TeamName").textValue();
+
+			System.out.format("('%s', '%s', '%s'),\n", firstName, lastName, teamName);
+
+		}
+	}
 
 }
