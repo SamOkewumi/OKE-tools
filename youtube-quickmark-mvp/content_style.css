@@ -1,0 +1,29 @@
+/* content_style.css (with debugging aids) */
+.quickmark-feedback {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    background-color: rgba(0, 0, 0, 0.85); /* Darker for contrast */
+    color: white;
+    padding: 12px 18px; /* Slightly larger */
+    border-radius: 8px;
+    font-family: Arial, sans-serif;
+    font-size: 16px;
+    z-index: 2147483647; /* Max z-index */
+    pointer-events: none;
+    
+    /* --- Debugging --- */
+    /* border: 2px solid red !important; */ /* Uncomment to see the box clearly */
+    /* opacity: 1 !important; */ /* Uncomment to force opacity for debugging transitions */
+    /* transform: translateY(0) !important; */ /* Uncomment to force position for debugging transitions */
+    /* --- End Debugging --- */
+
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.25s ease-out, transform 0.25s ease-out;
+}
+
+.quickmark-feedback.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
