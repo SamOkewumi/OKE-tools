@@ -1,0 +1,86 @@
+/* popup.css */
+body {
+    font-family: Arial, sans-serif;
+    width: 300px; /* Adjust as needed */
+    padding: 10px;
+    font-size: 14px;
+    color: #333;
+}
+
+.container {
+    display: flex;
+    flex-direction: column;
+}
+
+h1#popup-title {
+    font-size: 16px;
+    margin-top: 0;
+    margin-bottom: 10px;
+    color: #111;
+    white-space: nowrap;      /* Keep title on one line */
+    overflow: hidden;         /* Hide overflow */
+    text-overflow: ellipsis;  /* Add ellipsis for overflow */
+}
+
+#timestamps-list {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+    max-height: 300px; /* Allow scrolling for many items */
+    overflow-y: auto;
+}
+
+#timestamps-list li {
+    display: flex; /* Align timestamp and grade on one line */
+    justify-content: space-between; /* Space them out */
+    padding: 6px 2px;
+    border-bottom: 1px solid #eee;
+}
+
+#timestamps-list li:last-child {
+    border-bottom: none;
+}
+
+.timestamp-entry {
+    font-weight: bold;
+    color: #000;
+}
+
+.grade-entry {
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 12px;
+    font-weight: normal;
+}
+
+/* Grade-specific styling */
+.grade-good {
+    background-color: #d4edda; /* Light green */
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.grade-great {
+    background-color: #cce5ff; /* Light blue */
+    color: #004085;
+    border: 1px solid #b8daff;
+}
+
+.grade-wonderful {
+    background-color: #fff3cd; /* Light yellow */
+    color: #856404;
+    border: 1px solid #ffeeba;
+}
+
+.grade-n\/a { /* For "N/A" if grade is missing - CSS needs to escape the slash */
+    background-color: #e2e3e5; /* Light grey */
+    color: #383d41;
+    border: 1px solid #d6d8db;
+}
+
+
+#no-marks-message {
+    color: #777;
+    padding: 10px 0;
+    text-align: center;
+}

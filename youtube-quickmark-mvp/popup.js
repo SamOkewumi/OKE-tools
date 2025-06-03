@@ -1,16 +1,29 @@
-// popup.js
+// popup.js (v0.2.0 - Displaying Grades)
 
 document.addEventListener('DOMContentLoaded', async () => {
     const timestampsList = document.getElementById('timestamps-list');
     const noMarksMessage = document.getElementById('no-marks-message');
+    const popupTitleElement = document.getElementById('popup-title');
 
-    // Get the current active tab to find its URL and Video ID
+    console.log("Popup (v0.2.0) opened. Loading marks.");
+
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
     let currentVideoId = null;
+    let currentVideoTitle = "Current Video";
+
     if (tab && tab.url) {
         try {
             const url = new URL(tab.url);
+            if (tab.title && tab.title !== "YouTube") { // Get a more specific title if available
+                currentVideoTitle = tab.title.replace(/ - YouTube$/, "").trim(); // Remove " - YouTube" suffix
+            }
+            if (popupTitleElement) {
+                 // Truncate title if too long for the popup
+                popupTitleElement.textContent = `Marks for: ${currentVideoTitle.substring(0, 40)}${currentVideoTitle.length > 40 ? '...' : ''}`;
+                popupTitleElement.title = currentVideoTitle; // Full title on hover
+            }
+
             if (url.hostname === 'www.youtube.com' || url.hostname === 'youtube.com') {
                 if (url.pathname === '/watch') {
                     currentVideoId = url.searchParams.get('v');
@@ -19,61 +32,77 @@ document.addEventListener('DOMContentLoaded', async () => {
                 } else if (url.pathname.startsWith('/embed/')) {
                     currentVideoId = url.pathname.split('/embed/')[1];
                 }
-                // Add more conditions if YouTube has other video URL structures you encounter
             }
         } catch (e) {
-            console.error("Error parsing tab URL:", e);
-            // Fallback or error display for popup could be here
-            timestampsList.innerHTML = '<li>Error identifying YouTube video.</li>';
+            console.error("Popup: Error parsing tab URL or title:", e);
+            if (timestampsList) timestampsList.innerHTML = '<li>Error identifying video.</li>';
             return;
         }
     }
 
     if (!currentVideoId) {
-        timestampsList.innerHTML = '<li>Not a recognized YouTube video page.</li>';
-        // Or hide the list and show a specific message
-        noMarksMessage.textContent = 'Please navigate to a YouTube video page.';
-        noMarksMessage.style.display = 'block';
+        console.log("Popup: Not a recognized YouTube video page or no Video ID.");
+        if (timestampsList) timestampsList.innerHTML = '';
+        if (noMarksMessage) {
+            noMarksMessage.textContent = 'Navigate to a YouTube video page.';
+            noMarksMessage.style.display = 'block';
+        }
+        if (popupTitleElement) popupTitleElement.textContent = "QuickMark"; // Generic title
         return;
     }
 
-    // Fetch all stored marks
+    console.log(`Popup: Current Video ID: ${currentVideoId}, Title: ${currentVideoTitle}`);
+
     chrome.storage.local.get({ videoMarks: [] }, (data) => {
-        const allMarks = data.videoMarks;
+        if (chrome.runtime.lastError) {
+            console.error("Popup: Error fetching marks from storage:", chrome.runtime.lastError);
+            if (timestampsList) timestampsList.innerHTML = '<li>Error loading marks.</li>';
+            return;
+        }
+
+        const allMarks = data.videoMarks || [];
         const relevantMarks = allMarks.filter(mark => mark.videoId === currentVideoId);
+        console.log(`Popup: Found ${relevantMarks.length} relevant marks for this video.`);
+
+        if (!timestampsList) {
+            console.error("Popup: timestampsList element not found.");
+            return;
+        }
 
         if (relevantMarks.length === 0) {
-            noMarksMessage.style.display = 'block'; // Show the "no marks" message
-            timestampsList.innerHTML = ''; // Clear any previous list items
+            if (noMarksMessage) noMarksMessage.style.display = 'block';
+            timestampsList.innerHTML = '';
         } else {
-            noMarksMessage.style.display = 'none'; // Hide the "no marks" message
-            timestampsList.innerHTML = ''; // Clear any previous list items
+            if (noMarksMessage) noMarksMessage.style.display = 'none';
+            timestampsList.innerHTML = '';
 
-            // Sort marks by timestamp (ascending)
-            relevantMarks.sort((a, b) => a.timestamp - b.timestamp);
+            relevantMarks.sort((a, b) => a.timestamp - b.timestamp); // Sort by adjusted timestamp
 
-            relevantMarks.forEach(mark => {
+            relevantMarks.forEach((mark, index) => {
                 const listItem = document.createElement('li');
-                const timestampFormatted = formatTimestamp(mark.timestamp);
+
+                const timestampSpan = document.createElement('span');
+                timestampSpan.className = 'timestamp-entry';
+                timestampSpan.textContent = formatTimestamp(mark.timestamp);
+
+                const gradeSpan = document.createElement('span');
+                gradeSpan.className = 'grade-entry';
+                const gradeText = mark.grade || "N/A"; // Default if grade is missing
+                gradeSpan.textContent = gradeText;
+                // Add specific class for styling based on grade
+                gradeSpan.classList.add(`grade-${gradeText.toLowerCase().replace(/\s+/g, '-')}`);
+
+
+                // ----- DEBUGGING LOG for each mark -----
+                console.log(`Popup: Displaying Mark ${index + 1}: AdjTime=${mark.timestamp}, OrigTime=${mark.originalCaptureTime}, Grade=${gradeText}, FormattedTime=${timestampSpan.textContent}`);
+                // ----- END DEBUGGING LOG -----
+
+
+                listItem.appendChild(timestampSpan);
+                listItem.appendChild(gradeSpan);
                 
-                // For MVP, we'll display the timestamp.
-                // Title is likely redundant here as it's "for this video"
-                // but good to have the data if we want to add it.
-                listItem.textContent = `${timestampFormatted}`; 
-                
-                // Bonus: Make timestamp clickable to seek in video (more advanced, for later)
-                // listItem.title = `Click to seek to ${timestampFormatted} in video (Captured at: ${formatTimestamp(mark.originalCaptureTime)})`;
-                // listItem.addEventListener('click', () => {
-                //   chrome.scripting.executeScript({
-                //     target: { tabId: tab.id },
-                //     func: (timeToSeek) => {
-                //       const video = document.querySelector('video');
-                //       if (video) video.currentTime = timeToSeek;
-                //     },
-                //     args: [mark.timestamp]
-                //   });
-                //   window.close(); // Close popup after clicking
-                // });
+                // Optional: Add title attribute for more info on hover
+                listItem.title = `Captured at original time: ${formatTimestamp(mark.originalCaptureTime)}\nLooked back: ${mark.lookBackOffset}s\nSaved on: ${new Date(mark.capturedAt).toLocaleString()}`;
 
                 timestampsList.appendChild(listItem);
             });
@@ -82,6 +111,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 function formatTimestamp(totalSeconds) {
+    if (typeof totalSeconds !== 'number' || isNaN(totalSeconds)) {
+        return "00:00";
+    }
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
     const seconds = Math.floor(totalSeconds % 60);
